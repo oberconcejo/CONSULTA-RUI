@@ -8,7 +8,9 @@
     "dev": "node server.js"
   },
   "dependencies": {
-    "express": "^4.19.2"
+    "express": "^4.19.2",
+    "https-proxy-agent": "^9.1.0",
+    "node-fetch": "^2.7.0"
   },
   "keywords": [
     "rui",
