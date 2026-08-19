@@ -1,4 +1,49 @@
-const fetch = require('node-fetch');
+const nodeFetch = require('node-fetch');
+const http = require('http');
+const https = require('https');
+const dns = require('dns');
+
+// Configuración de DNS de Google para resolver nombres de dominio
+const googleResolver = new dns.Resolver();
+googleResolver.setServers(['8.8.8.8', '8.8.4.4']);
+
+function customLookup(hostname, options, callback) {
+    if (typeof options === 'function') {
+        callback = options;
+        options = {};
+    }
+    const family = options.family || 0;
+    const all = options.all || false;
+    const method = family === 6 ? 'resolve6' : 'resolve4';
+
+    googleResolver[method](hostname, (err, addresses) => {
+        if (err || !addresses || addresses.length === 0) {
+            // Fallback al DNS del sistema operativo si Google DNS falla
+            return dns.lookup(hostname, options, callback);
+        }
+        if (all) {
+            return callback(null, addresses.map(addr => ({ address: addr, family: family || 4 })));
+        } else {
+            return callback(null, addresses[0], family || 4);
+        }
+    });
+}
+
+const customHttpAgent = new http.Agent({ lookup: customLookup, keepAlive: true });
+const customHttpsAgent = new https.Agent({ lookup: customLookup, keepAlive: true });
+
+// Wrapper de fetch que fuerza el uso de DNS de Google en peticiones directas
+const fetch = (urlStr, options = {}) => {
+    if (!options.agent) {
+        try {
+            const urlObj = new URL(urlStr);
+            options.agent = urlObj.protocol === 'https:' ? customHttpsAgent : customHttpAgent;
+        } catch (e) {
+            options.agent = customHttpsAgent;
+        }
+    }
+    return nodeFetch(urlStr, options);
+};
 const HttpsProxyAgent = require('https-proxy-agent');
 
 // Desactivar la verificación estricta de SSL/TLS para evitar caídas por certificados del DNP
