@@ -311,7 +311,8 @@ function extractExtraFields(extraData) {
 }
 
 module.exports = async (req, res) => {
-  if (req.method === 'OPTIONS') {
+  try {
+    if (req.method === 'OPTIONS') {
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-API-Key');
     res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
@@ -455,5 +456,14 @@ module.exports = async (req, res) => {
     }
 
     return res.json(fallback);
+  }
+  } catch (crashError) {
+    console.error("CRITICAL EXCEPTION IN SERVERLESS FUNCTION:", crashError);
+    return res.status(500).json({
+      ok: false,
+      error: "Error inesperado en el servidor de la nube.",
+      details: crashError.message,
+      stack: crashError.stack
+    });
   }
 };
