@@ -51,33 +51,22 @@ async function refreshProxyList(fetchLib) {
     console.log(`Lista de proxies combinada y limpia. Total: ${colombianProxies.length} proxies de Colombia cargados.`);
 }
 
-// Obtener el agente del proxy actual o null si no hay disponibles
-async function getProxyAgent(fetchLib, HttpsProxyAgentClass) {
+// Obtener lista de proxies para la carrera actual
+async function getProxiesForRace(fetchLib, count) {
     if (colombianProxies.length === 0 || (Date.now() - lastProxyFetchTime > 10 * 60 * 1000)) {
         await refreshProxyList(fetchLib);
     }
     
     if (colombianProxies.length === 0) {
-        return null;
+        return [];
     }
     
-    if (currentProxyIndex >= colombianProxies.length) {
-        currentProxyIndex = 0;
+    const selected = [];
+    for (let i = 0; i < Math.min(count, colombianProxies.length); i++) {
+        const idx = (currentProxyIndex + i) % colombianProxies.length;
+        selected.push(colombianProxies[idx]);
     }
-    
-    const proxy = colombianProxies[currentProxyIndex];
-    return {
-        proxy: proxy,
-        agent: new HttpsProxyAgentClass(`http://${proxy}`)
-    };
-}
-
-// Cambiar al siguiente proxy cuando el actual falla
-function rotateProxy() {
-    if (colombianProxies.length > 0) {
-        currentProxyIndex = (currentProxyIndex + 1) % colombianProxies.length;
-        console.log(`Rotando proxy. Siguiente índice activo: ${currentProxyIndex} (${colombianProxies[currentProxyIndex]})`);
-    }
+    return selected;
 }
 
 // Exponer el handler compatible con Express (local) y Serverless Functions (Vercel)
@@ -118,8 +107,6 @@ module.exports = async (req, res) => {
         const body = `pNumDoc=${encodeURIComponent(pNumDoc)}&pTipDoc=${encodeURIComponent(pTipDoc)}`;
 
         let success = false;
-        let attempts = 0;
-        const maxAttempts = 6; // Intentar hasta 6 proxies diferentes para asegurar éxito en la nube
         let lastError = '';
         let responseData = null;
 
@@ -145,63 +132,71 @@ module.exports = async (req, res) => {
                 lastError = err.message;
             }
         } else {
-            // En la nube (Vercel/Render), usar la rotación de proxies de Colombia obligatoriamente
-            while (attempts < maxAttempts && !success) {
-                attempts++;
-                const proxyObj = await getProxyAgent(fetch, HttpsProxyAgent);
-                
-                if (!proxyObj) {
-                    console.log(`[Intento ${attempts}] No hay proxies colombianos disponibles en la nube. Conexión directa...`);
-                    try {
-                        const response = await fetch(url, {
-                            method: 'POST',
-                            headers: headers,
-                            body: body,
-                            timeout: 6000
-                        });
-                        if (response.ok) {
-                            responseData = await response.json();
-                            success = true;
-                        } else {
-                            lastError = `Status ${response.status} ${response.statusText}`;
-                        }
-                    } catch (err) {
-                        lastError = err.message;
-                    }
-                    break;
-                }
-
-                console.log(`[Intento ${attempts}/${maxAttempts}] Consultando RUI via proxy de Colombia: ${proxyObj.proxy}...`);
-                
-                // Configurar AbortController para timeout de conexión estricto de 5 segundos
-                const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 5000);
-
+            // En la nube (Vercel/Render), usar la carrera de proxies en paralelo (6 en paralelo)
+            const proxyList = await getProxiesForRace(fetch, 6);
+            
+            if (proxyList.length === 0) {
+                console.log("No hay proxies colombianos disponibles en la nube. Intentando conexión directa...");
                 try {
                     const response = await fetch(url, {
                         method: 'POST',
                         headers: headers,
                         body: body,
-                        agent: proxyObj.agent,
-                        signal: controller.signal
+                        timeout: 6000
                     });
-
-                    clearTimeout(timeoutId);
-
                     if (response.ok) {
                         responseData = await response.json();
                         success = true;
-                        console.log(`[Éxito] Consulta completada usando proxy: ${proxyObj.proxy}`);
                     } else {
                         lastError = `Status ${response.status} ${response.statusText}`;
-                        console.log(`[Fallo] Proxy ${proxyObj.proxy} respondió con código: ${response.status}`);
-                        rotateProxy();
                     }
                 } catch (err) {
-                    clearTimeout(timeoutId);
                     lastError = err.message;
-                    console.log(`[Fallo] Proxy ${proxyObj.proxy} dio error: ${err.message}`);
-                    rotateProxy();
+                }
+            } else {
+                console.log(`[Carrera de Proxies] Lanzando consulta paralela con ${proxyList.length} proxies colombianos...`);
+                
+                const promises = proxyList.map(async (proxy, index) => {
+                    const agent = new HttpsProxyAgent(`http://${proxy}`);
+                    const controller = new AbortController();
+                    const timeoutId = setTimeout(() => controller.abort(), 6000); // 6 segundos de timeout
+
+                    try {
+                        const response = await fetch(url, {
+                            method: 'POST',
+                            headers: headers,
+                            body: body,
+                            agent: agent,
+                            signal: controller.signal
+                        });
+
+                        clearTimeout(timeoutId);
+
+                        if (response.ok) {
+                            const data = await response.json();
+                            if (data && typeof data === 'object') {
+                                // Guardar el índice del proxy exitoso para priorizarlo en la siguiente carrera
+                                currentProxyIndex = colombianProxies.indexOf(proxy);
+                                console.log(`[Éxito] Proxy ${proxy} ganó la carrera y completó la consulta.`);
+                                return data;
+                            }
+                        }
+                        throw new Error(`Proxy respondió con status ${response.status}`);
+                    } catch (err) {
+                        clearTimeout(timeoutId);
+                        throw err;
+                    }
+                });
+
+                try {
+                    // Esperar a que el proxy más rápido tenga éxito
+                    responseData = await Promise.any(promises);
+                    success = true;
+                } catch (aggregateError) {
+                    lastError = 'Todos los proxies paralelos fallaron o dieron timeout.';
+                    console.error(lastError);
+                    // Rotar el índice para probar un grupo de proxies diferente la próxima vez
+                    currentProxyIndex = (currentProxyIndex + 6) % colombianProxies.length;
                 }
             }
         }
@@ -209,10 +204,10 @@ module.exports = async (req, res) => {
         if (success && responseData) {
             return res.json(responseData);
         } else {
-            console.error('Todas las consultas via proxy fallaron. Último error:', lastError);
+            console.error('La consulta falló en todos los intentos. Último error:', lastError);
             return res.status(500).json({
                 ok: false,
-                error: `Error al conectar con la Ventanilla Social RUI (Proxies fallidos). Detalles: ${lastError}`
+                error: `Error al conectar con la Ventanilla Social RUI. Detalles: ${lastError}`
             });
         }
     } catch (crashError) {
