@@ -97,59 +97,82 @@ module.exports = async (req, res) => {
 
     let success = false;
     let attempts = 0;
-    const maxAttempts = 4; // Intentar hasta con 4 proxies diferentes para asegurar éxito
+    const maxAttempts = 4;
     let lastError = '';
     let responseData = null;
 
-    while (attempts < maxAttempts && !success) {
-        attempts++;
-        const proxyObj = await getProxyAgent();
-        
-        if (!proxyObj) {
-            console.log(`[Intento ${attempts}] No hay proxies colombianos disponibles. Intentando conexión directa...`);
+    // Verificar si estamos corriendo en la nube de Vercel
+    const isVercel = process.env.VERCEL || process.env.NOW_BUILDER;
+
+    if (!isVercel) {
+        console.log("Entorno Local de Colombia detectado. Conectando directamente para máxima velocidad...");
+        try {
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: headers,
+                body: body,
+                timeout: 8000
+            });
+            if (response.ok) {
+                responseData = await response.json();
+                success = true;
+            } else {
+                lastError = `Status ${response.status} ${response.statusText}`;
+            }
+        } catch (err) {
+            lastError = err.message;
+        }
+    } else {
+        // En Vercel (nube), usar la rotación de proxies de Colombia obligatoriamente
+        while (attempts < maxAttempts && !success) {
+            attempts++;
+            const proxyObj = await getProxyAgent();
+            
+            if (!proxyObj) {
+                console.log(`[Intento ${attempts}] No hay proxies colombianos disponibles en la nube. Conexión directa...`);
+                try {
+                    const response = await fetch(url, {
+                        method: 'POST',
+                        headers: headers,
+                        body: body,
+                        timeout: 6000
+                    });
+                    if (response.ok) {
+                        responseData = await response.json();
+                        success = true;
+                    } else {
+                        lastError = `Status ${response.status} ${response.statusText}`;
+                    }
+                } catch (err) {
+                    lastError = err.message;
+                }
+                break;
+            }
+
+            console.log(`[Intento ${attempts}/${maxAttempts}] Consultando RUI via proxy de Colombia: ${proxyObj.proxy}...`);
             try {
                 const response = await fetch(url, {
                     method: 'POST',
                     headers: headers,
                     body: body,
-                    timeout: 6000
+                    agent: proxyObj.agent,
+                    timeout: 5000
                 });
+
                 if (response.ok) {
                     responseData = await response.json();
                     success = true;
+                    console.log(`[Éxito] Consulta completada usando proxy: ${proxyObj.proxy}`);
                 } else {
                     lastError = `Status ${response.status} ${response.statusText}`;
+                    console.log(`[Fallo] Proxy ${proxyObj.proxy} respondió con código: ${response.status}`);
+                    rotateProxy();
                 }
             } catch (err) {
                 lastError = err.message;
-            }
-            break;
-        }
-
-        console.log(`[Intento ${attempts}/${maxAttempts}] Consultando RUI via proxy de Colombia: ${proxyObj.proxy}...`);
-        try {
-            // Timeout bajo de 5 segundos para rotar rápido si el proxy está caído/lento
-            const response = await fetch(url, {
-                method: 'POST',
-                headers: headers,
-                body: body,
-                agent: proxyObj.agent,
-                timeout: 5000
-            });
-
-            if (response.ok) {
-                responseData = await response.json();
-                success = true;
-                console.log(`[Éxito] Consulta completada usando proxy: ${proxyObj.proxy}`);
-            } else {
-                lastError = `Status ${response.status} ${response.statusText}`;
-                console.log(`[Fallo] Proxy ${proxyObj.proxy} respondió con código: ${response.status}`);
+                console.log(`[Fallo] Proxy ${proxyObj.proxy} dio error: ${err.message}`);
                 rotateProxy();
             }
-        } catch (err) {
-            lastError = err.message;
-            console.log(`[Fallo] Proxy ${proxyObj.proxy} dio error: ${err.message}`);
-            rotateProxy();
         }
     }
 
