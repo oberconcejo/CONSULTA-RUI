@@ -1,3 +1,6 @@
+const fetch = require('node-fetch');
+const HttpsProxyAgent = require('https-proxy-agent');
+
 // Desactivar la verificación estricta de SSL/TLS para evitar caídas por certificados del DNP
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
 
@@ -9,20 +12,43 @@ let colombianProxies = [];
 let currentProxyIndex = 0;
 let lastProxyFetchTime = 0;
 
-// Refrescar la lista de proxies colombianos gratuitos usando la API de Proxyscrape
+// Refrescar la lista de proxies colombianos combinando Proxyscrape y Geonode
 async function refreshProxyList(fetchLib) {
     console.log('Refrescando lista de proxies de Colombia...');
-    const url = 'https://api.proxyscrape.com/v2/?request=displayproxies&protocol=http&timeout=6000&country=CO&ssl=yes&anonymity=all';
+    const urlProxyscrape = 'https://api.proxyscrape.com/v2/?request=displayproxies&protocol=http&timeout=6000&country=CO&ssl=yes&anonymity=all';
+    const urlGeonode = 'https://proxylist.geonode.com/api/proxy-list?limit=100&page=1&sort_by=lastChecked&sort_type=desc&country=CO&protocols=http%2Chttps';
+    
+    let proxies = [];
+    
+    // Fetch from Proxyscrape
     try {
-        const response = await fetchLib(url);
-        const text = await response.text();
-        colombianProxies = text.split('\r\n').map(p => p.trim()).filter(p => p !== '');
-        currentProxyIndex = 0;
-        lastProxyFetchTime = Date.now();
-        console.log(`Lista de proxies actualizada. Se encontraron ${colombianProxies.length} proxies colombianos.`);
-    } catch (error) {
-        console.error('Error al obtener lista de proxies colombianos:', error.message);
+        const res = await fetchLib(urlProxyscrape);
+        const text = await res.text();
+        const psList = text.split('\r\n').map(p => p.trim()).filter(p => p !== '');
+        proxies = proxies.concat(psList);
+        console.log(`Proxyscrape: Encontrados ${psList.length} proxies colombianos SSL.`);
+    } catch (e) {
+        console.error('Error al obtener proxies de Proxyscrape:', e.message);
     }
+    
+    // Fetch from Geonode
+    try {
+        const res = await fetchLib(urlGeonode);
+        const data = await res.json();
+        if (data && data.data) {
+            const gnList = data.data.map(p => `${p.ip}:${p.port}`);
+            proxies = proxies.concat(gnList);
+            console.log(`Geonode: Encontrados ${gnList.length} proxies colombianos.`);
+        }
+    } catch (e) {
+        console.error('Error al obtener proxies de Geonode:', e.message);
+    }
+    
+    // Remover duplicados y guardar
+    colombianProxies = [...new Set(proxies)];
+    currentProxyIndex = 0;
+    lastProxyFetchTime = Date.now();
+    console.log(`Lista de proxies combinada y limpia. Total: ${colombianProxies.length} proxies de Colombia cargados.`);
 }
 
 // Obtener el agente del proxy actual o null si no hay disponibles
@@ -57,10 +83,6 @@ function rotateProxy() {
 // Exponer el handler compatible con Express (local) y Serverless Functions (Vercel)
 module.exports = async (req, res) => {
     try {
-        // Cargar dependencias de forma dinámica dentro del handler para diagnosticar fallas de carga en Vercel
-        const fetch = require('node-fetch');
-        const HttpsProxyAgent = require('https-proxy-agent');
-
         // Solo permitir solicitudes POST para la API
         if (req.method !== 'POST') {
             return res.status(405).json({ ok: false, error: 'Método no permitido. Use POST.' });
@@ -97,33 +119,33 @@ module.exports = async (req, res) => {
 
         let success = false;
         let attempts = 0;
-        const maxAttempts = 5;
+        const maxAttempts = 6; // Intentar hasta 6 proxies diferentes para asegurar éxito en la nube
         let lastError = '';
         let responseData = null;
 
-    // Verificar si estamos corriendo en la nube (Vercel o Render) o en local
-    const isCloud = process.env.VERCEL || process.env.RENDER || process.env.NODE_ENV === 'production';
+        // Verificar si estamos corriendo en la nube (Vercel o Render) o en local
+        const isCloud = process.env.VERCEL || process.env.RENDER || process.env.NODE_ENV === 'production';
 
-    if (!isCloud) {
-        console.log("Entorno Local de Colombia detectado. Conectando directamente para máxima velocidad...");
-        try {
-            const response = await fetch(url, {
-                method: 'POST',
-                headers: headers,
-                body: body,
-                timeout: 8000
-            });
-            if (response.ok) {
-                responseData = await response.json();
-                success = true;
-            } else {
-                lastError = `Status ${response.status} ${response.statusText}`;
+        if (!isCloud) {
+            console.log("Entorno Local de Colombia detectado. Conectando directamente para máxima velocidad...");
+            try {
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: headers,
+                    body: body,
+                    timeout: 8000
+                });
+                if (response.ok) {
+                    responseData = await response.json();
+                    success = true;
+                } else {
+                    lastError = `Status ${response.status} ${response.statusText}`;
+                }
+            } catch (err) {
+                lastError = err.message;
             }
-        } catch (err) {
-            lastError = err.message;
-        }
-    } else {
-        // En la nube (Vercel/Render), usar la rotación de proxies de Colombia obligatoriamente
+        } else {
+            // En la nube (Vercel/Render), usar la rotación de proxies de Colombia obligatoriamente
             while (attempts < maxAttempts && !success) {
                 attempts++;
                 const proxyObj = await getProxyAgent(fetch, HttpsProxyAgent);
@@ -135,7 +157,7 @@ module.exports = async (req, res) => {
                             method: 'POST',
                             headers: headers,
                             body: body,
-                            timeout: 3000
+                            timeout: 6000
                         });
                         if (response.ok) {
                             responseData = await response.json();
@@ -150,14 +172,21 @@ module.exports = async (req, res) => {
                 }
 
                 console.log(`[Intento ${attempts}/${maxAttempts}] Consultando RUI via proxy de Colombia: ${proxyObj.proxy}...`);
+                
+                // Configurar AbortController para timeout de conexión estricto de 5 segundos
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 5000);
+
                 try {
                     const response = await fetch(url, {
                         method: 'POST',
                         headers: headers,
                         body: body,
                         agent: proxyObj.agent,
-                        timeout: 3000
+                        signal: controller.signal
                     });
+
+                    clearTimeout(timeoutId);
 
                     if (response.ok) {
                         responseData = await response.json();
@@ -169,6 +198,7 @@ module.exports = async (req, res) => {
                         rotateProxy();
                     }
                 } catch (err) {
+                    clearTimeout(timeoutId);
                     lastError = err.message;
                     console.log(`[Fallo] Proxy ${proxyObj.proxy} dio error: ${err.message}`);
                     rotateProxy();
