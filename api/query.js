@@ -133,7 +133,7 @@ module.exports = async (req, res) => {
             }
         } else {
             // En la nube (Vercel/Render), usar la carrera de proxies en paralelo (6 en paralelo)
-            const proxyList = await getProxiesForRace(fetch, 6);
+            const proxyList = await getProxiesForRace(fetch, 10);
             
             if (proxyList.length === 0) {
                 console.log("No hay proxies colombianos disponibles en la nube. Intentando conexión directa...");
@@ -159,7 +159,7 @@ module.exports = async (req, res) => {
                 const promises = proxyList.map(async (proxy, index) => {
                     const agent = new HttpsProxyAgent(`http://${proxy}`);
                     const controller = new AbortController();
-                    const timeoutId = setTimeout(() => controller.abort(), 6000); // 6 segundos de timeout
+                    const timeoutId = setTimeout(() => controller.abort(), 8000); // 8 segundos de timeout
 
                     try {
                         const response = await fetch(url, {
@@ -196,7 +196,7 @@ module.exports = async (req, res) => {
                     lastError = 'Todos los proxies paralelos fallaron o dieron timeout.';
                     console.error(lastError);
                     // Rotar el índice para probar un grupo de proxies diferente la próxima vez
-                    currentProxyIndex = (currentProxyIndex + 6) % colombianProxies.length;
+                    currentProxyIndex = (currentProxyIndex + 10) % colombianProxies.length;
                 }
             }
         }
