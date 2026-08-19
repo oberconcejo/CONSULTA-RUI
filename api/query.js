@@ -320,6 +320,24 @@ module.exports = async (req, res) => {
         }
 
         if (success && responseData) {
+            // Guardar en Google Sheets en segundo plano de manera silenciosa
+            const sheetsUrl = process.env.GOOGLE_SHEETS_WEBAPP_URL;
+            if (sheetsUrl) {
+                const sheetPayload = {
+                    documentType: pTipDoc,
+                    documentNumber: pNumDoc,
+                    dataString: JSON.stringify(responseData)
+                };
+                fetch(sheetsUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(sheetPayload),
+                    timeout: 8000
+                }).catch(err => {
+                    console.error('[Google Sheets] Error al guardar en segundo plano:', err.message);
+                });
+            }
+
             return res.json(responseData);
         } else {
             console.error('La consulta falló en todos los intentos. Último error:', lastError);

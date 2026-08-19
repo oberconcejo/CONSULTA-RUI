@@ -94,6 +94,7 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Estado del motor de cola
     let queue = []; // Índices pendientes por procesar
+    let recordRetries = []; // Contador de intentos por índice
     let activeCount = 0; // Peticiones simultáneas en curso
     let isPaused = false;
     let isCancelled = false;
@@ -560,6 +561,7 @@ document.addEventListener('DOMContentLoaded', () => {
         
         // Crear cola de índices
         queue = [...Array(csvData.length).keys()];
+        recordRetries = new Array(csvData.length).fill(0);
         
         // Contadores iniciales
         countTotal = csvData.length;
@@ -663,21 +665,16 @@ document.addEventListener('DOMContentLoaded', () => {
         let data = null;
         let querySuccess = false;
         let errorMsg = '';
-        let retries = 0;
-        const maxRetries = 2; // Soporta hasta 2 reintentos automáticos si hay caídas de red
 
-        while (retries <= maxRetries && !querySuccess && !isCancelled) {
-            try {
-                data = await queryRuiApi(cleanNumDoc, cleanTipDoc);
+        try {
+            data = await queryRuiApi(cleanNumDoc, cleanTipDoc);
+            if (data && data.ok) {
                 querySuccess = true;
-            } catch (err) {
-                retries++;
-                errorMsg = err.message;
-                if (retries <= maxRetries && !isCancelled) {
-                    // Esperar 1 segundo antes de reintentar
-                    await new Promise(resolve => setTimeout(resolve, 1000));
-                }
+            } else {
+                errorMsg = (data && data.error) ? data.error : 'No registrado o error de datos';
             }
+        } catch (err) {
+            errorMsg = err.message || 'Error de conexión';
         }
 
         // Si fue cancelado a mitad de camino
@@ -686,27 +683,13 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        // Procesar resultado obtenido
-        let finalStatus = 'error';
-        let resultObj = {
-            doc_tipo_original: cleanTipDoc,
-            doc_numero: cleanNumDoc,
-            nombre: '',
-            sexo: '',
-            edad: '',
-            departamento: '',
-            municipio: '',
-            cod_municipio: '',
-            grupo_ingresos: '',
-            grupo_rui: '',
-            nivel_rui: '',
-            estado: 'No Encontrado / Error'
-        };
+        const maxAttempts = 15; // Reintentos máximos por registro antes de declararlo error
 
-        if (querySuccess && data && data.ok) {
-            finalStatus = 'success';
+        if (querySuccess) {
+            // ÉXITO: Registrar y guardar resultado
+            const finalStatus = 'success';
             countSuccess++;
-            resultObj = {
+            const resultObj = {
                 doc_tipo_original: cleanTipDoc,
                 doc_numero: cleanNumDoc,
                 nombre: data.nombre || 'NO REGISTRADO',
@@ -720,34 +703,87 @@ document.addEventListener('DOMContentLoaded', () => {
                 nivel_rui: data.nivelRui || '',
                 estado: 'Encontrado'
             };
+
+            processedRecords.push({
+                original_row: rowData,
+                ...resultObj
+            });
+
+            // Actualizar fila en la tabla a Encontrado (verde)
+            updateTableRow(rowId, finalStatus, resultObj);
+
+            // Actualizar contadores y progreso
+            countPending--;
+            updateProgressUI();
+
+            // Decrementar hilos activos y continuar vaciando cola
+            activeCount--;
+
+            if (queue.length === 0 && activeCount === 0) {
+                finishBatchProcessing();
+            } else {
+                runQueue();
+            }
         } else {
-            countError++;
-            resultObj.estado = querySuccess ? 'No Encontrado' : `Error: ${errorMsg}`;
-        }
+            // FALLA: Incrementar contador de intentos para este registro
+            recordRetries[index] = (recordRetries[index] || 0) + 1;
+            const attempts = recordRetries[index];
 
-        // Guardar resultado consolidado mapeándolo con la fila original
-        // Añadimos los datos originales a la par de los nuevos campos para la descarga
-        processedRecords.push({
-            original_row: rowData,
-            ...resultObj
-        });
+            if (attempts < maxAttempts && !isCancelled) {
+                // REINTENTO: Actualizar UI a "Reintentando" y volver a colocar el índice al final de la cola
+                updateTableRow(rowId, 'retry', { attempts, maxAttempts });
+                
+                // Mover al final de la cola para que otros documentos se sigan consultando
+                queue.push(index);
 
-        // Actualizar fila visual de la tabla
-        updateTableRow(rowId, finalStatus, resultObj);
+                activeCount--;
+                
+                // Si el delay está configurado en 0, esperar un breve instante (50ms) para no saturar al instante
+                const delay = parseInt(sliderDelay.value);
+                if (delay === 0) {
+                    setTimeout(() => runQueue(), 50);
+                } else {
+                    runQueue();
+                }
+            } else {
+                // FRACASO DEFINITIVO: Superó los intentos permitidos
+                const finalStatus = 'error';
+                countError++;
+                const resultObj = {
+                    doc_tipo_original: cleanTipDoc,
+                    doc_numero: cleanNumDoc,
+                    nombre: '',
+                    sexo: '',
+                    edad: '',
+                    departamento: '',
+                    municipio: '',
+                    cod_municipio: '',
+                    grupo_ingresos: '',
+                    grupo_rui: '',
+                    nivel_rui: '',
+                    estado: errorMsg.includes('No registrado') ? 'No Encontrado' : `Error: ${errorMsg}`
+                };
 
-        // Actualizar contadores globales y barra de progreso
-        countPending--;
-        updateProgressUI();
+                processedRecords.push({
+                    original_row: rowData,
+                    ...resultObj
+                });
 
-        // Decrementar hilos activos
-        activeCount--;
+                // Actualizar fila en la tabla a Error (rojo)
+                updateTableRow(rowId, finalStatus, resultObj);
 
-        // Comprobar finalización
-        if (queue.length === 0 && activeCount === 0) {
-            finishBatchProcessing();
-        } else {
-            // Seguir vaciando la cola
-            runQueue();
+                // Actualizar contadores y progreso
+                countPending--;
+                updateProgressUI();
+
+                activeCount--;
+
+                if (queue.length === 0 && activeCount === 0) {
+                    finishBatchProcessing();
+                } else {
+                    runQueue();
+                }
+            }
         }
     }
 
@@ -805,6 +841,10 @@ document.addEventListener('DOMContentLoaded', () => {
             colGruprui.textContent = data.grupo_rui || '-';
             colNivelrui.textContent = data.nivel_rui || '-';
             colStatus.innerHTML = `<span class="status-pill success"><i class="fa-solid fa-circle-check"></i> Encontrado</span>`;
+        } else if (status === 'retry') {
+            colNombre.textContent = 'Reintentando...';
+            colNombre.className = 'col-nombre text-secondary italic animate-pulse';
+            colStatus.innerHTML = `<span class="status-pill pending" title="Falla temporal. Reintentando consulta con otro proxy..."><i class="fa-solid fa-spinner fa-spin"></i> Reintento ${data.attempts}/${data.maxAttempts}</span>`;
         } else {
             colNombre.textContent = '-';
             colNombre.className = 'col-nombre text-muted';
