@@ -6,7 +6,7 @@ const nodeFetch = require('node-fetch');
 const http = require('http');
 const https = require('https');
 const dns = require('dns');
-const HttpsProxyAgent = require('https-proxy-agent');
+const { HttpsProxyAgent } = require('https-proxy-agent');
 
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
 const RUI_API_KEY = process.env.RUI_API_KEY || 'ober_rui_key_sec_9876';
