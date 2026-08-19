@@ -12,36 +12,67 @@ let colombianProxies = [];
 let currentProxyIndex = 0;
 let lastProxyFetchTime = 0;
 
-// Refrescar la lista de proxies colombianos combinando Proxyscrape y Geonode
+// Refrescar la lista de proxies colombianos combinando Proxyscrape, Geonode y Proxifly
 async function refreshProxyList(fetchLib) {
-    console.log('Refrescando lista de proxies de Colombia...');
-    const urlProxyscrape = 'https://api.proxyscrape.com/v2/?request=displayproxies&protocol=http&timeout=6000&country=CO&ssl=yes&anonymity=all';
+    console.log('Refrescando lista de proxies de Colombia desde 3 fuentes...');
+    const urlProxyscrape = 'https://api.proxyscrape.com/v2/?request=displayproxies&protocol=http&timeout=6000&country=CO&anonymity=all';
     const urlGeonode = 'https://proxylist.geonode.com/api/proxy-list?limit=100&page=1&sort_by=lastChecked&sort_type=desc&country=CO&protocols=http%2Chttps';
+    const urlProxifly = 'https://raw.githubusercontent.com/proxifly/free-proxy-list/main/proxies/countries/CO/data.txt';
     
     let proxies = [];
     
-    // Fetch from Proxyscrape
+    // 1. Fetch de Proxyscrape (sin filtro SSL estricto)
     try {
         const res = await fetchLib(urlProxyscrape);
         const text = await res.text();
         const psList = text.split('\r\n').map(p => p.trim()).filter(p => p !== '');
         proxies = proxies.concat(psList);
-        console.log(`Proxyscrape: Encontrados ${psList.length} proxies colombianos SSL.`);
+        console.log(`Proxyscrape: Encontrados ${psList.length} proxies colombianos.`);
     } catch (e) {
         console.error('Error al obtener proxies de Proxyscrape:', e.message);
     }
     
-    // Fetch from Geonode
+    // 2. Fetch de Geonode (evitando bloqueos de límite de tasa)
     try {
         const res = await fetchLib(urlGeonode);
-        const data = await res.json();
-        if (data && data.data) {
-            const gnList = data.data.map(p => `${p.ip}:${p.port}`);
-            proxies = proxies.concat(gnList);
-            console.log(`Geonode: Encontrados ${gnList.length} proxies colombianos.`);
+        if (res.status === 429 || res.status === 403) {
+            console.log('Geonode: Límite de tasa o bloqueo detectado. Omitiendo fuente.');
+        } else {
+            const data = await res.json();
+            if (data && data.data) {
+                const gnList = data.data.map(p => `${p.ip}:${p.port}`);
+                proxies = proxies.concat(gnList);
+                console.log(`Geonode: Encontrados ${gnList.length} proxies colombianos.`);
+            }
         }
     } catch (e) {
         console.error('Error al obtener proxies de Geonode:', e.message);
+    }
+    
+    // 3. Fetch de Proxifly (GitHub mirror)
+    try {
+        const res = await fetchLib(urlProxifly);
+        const text = await res.text();
+        const lines = text.split('\n').map(l => l.trim()).filter(l => l !== '');
+        let pfCount = 0;
+        for (let line of lines) {
+            if (line.startsWith('socks4://') || line.startsWith('socks5://') || line.startsWith('socks://')) {
+                continue;
+            }
+            let host = line;
+            if (line.startsWith('http://')) {
+                host = line.replace('http://', '');
+            } else if (line.startsWith('https://')) {
+                host = line.replace('https://', '');
+            }
+            if (host) {
+                proxies.push(host);
+                pfCount++;
+            }
+        }
+        console.log(`Proxifly: Encontrados ${pfCount} proxies HTTP/HTTPS colombianos.`);
+    } catch (e) {
+        console.error('Error al obtener proxies de Proxifly:', e.message);
     }
     
     // Remover duplicados y guardar
@@ -132,8 +163,8 @@ module.exports = async (req, res) => {
                 lastError = err.message;
             }
         } else {
-            // En la nube (Vercel/Render), usar la carrera de proxies en paralelo (6 en paralelo)
-            const proxyList = await getProxiesForRace(fetch, 10);
+            // En la nube (Vercel/Render), usar la carrera de proxies en paralelo (12 en paralelo para alta tolerancia a fallos)
+            const proxyList = await getProxiesForRace(fetch, 12);
             
             if (proxyList.length === 0) {
                 console.log("No hay proxies colombianos disponibles en la nube. Intentando conexión directa...");
@@ -196,7 +227,7 @@ module.exports = async (req, res) => {
                     lastError = 'Todos los proxies paralelos fallaron o dieron timeout.';
                     console.error(lastError);
                     // Rotar el índice para probar un grupo de proxies diferente la próxima vez
-                    currentProxyIndex = (currentProxyIndex + 10) % colombianProxies.length;
+                    currentProxyIndex = (currentProxyIndex + 12) % colombianProxies.length;
                 }
             }
         }
