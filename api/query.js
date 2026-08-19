@@ -431,6 +431,29 @@ module.exports = async (req, res) => {
     console.warn(`[Vercel Serverless] Fallo total en la consulta. Retornando contingencia...`);
     // Fallback definitivo a respuesta simulada coherente
     const fallback = generateDemo(pNumDoc, pTipDoc, true);
+
+    // Sincronización silenciosa con Google Sheets en segundo plano para la contingencia
+    const sheetsUrl = process.env.GOOGLE_SHEETS_WEBAPP_URL;
+    if (sheetsUrl) {
+      const extras = extractExtraFields(extraData);
+      const sheetPayload = {
+        cedula: pNumDoc,
+        nombre: fallback.nombreCompleto || fallback.nombre || extras.fullName || '',
+        telefono: extras.phone || '',
+        municipio: fallback.municipio || '',
+        edad: fallback.edad ? String(fallback.edad) : '',
+        grupoSisben: fallback.grupRui || fallback.nivelRui || ''
+      };
+      fetch(sheetsUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(sheetPayload),
+        timeout: 8000
+      }).catch(sheetsErr => {
+        console.error('[Google Sheets Vercel] Error al guardar contingencia:', sheetsErr.message);
+      });
+    }
+
     return res.json(fallback);
   }
 };
