@@ -247,14 +247,14 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // Helper centralizado para llamar a la API
-    async function queryRuiApi(numDoc, tipDoc) {
+    async function queryRuiApi(numDoc, tipDoc, extraData) {
         const response = await fetch('/api/query', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
                 'X-API-Key': 'ober_rui_key_sec_9876'
             },
-            body: JSON.stringify({ pNumDoc: numDoc, pTipDoc: tipDoc })
+            body: JSON.stringify({ pNumDoc: numDoc, pTipDoc: tipDoc, extraData: extraData })
         });
 
         if (!response.ok) {
@@ -667,7 +667,13 @@ document.addEventListener('DOMContentLoaded', () => {
         let errorMsg = '';
 
         try {
-            data = await queryRuiApi(cleanNumDoc, cleanTipDoc);
+            const extraData = {};
+            if (csvHeaders && csvHeaders.length > 0) {
+                csvHeaders.forEach((header, colIdx) => {
+                    extraData[header] = rowData[colIdx] || '';
+                });
+            }
+            data = await queryRuiApi(cleanNumDoc, cleanTipDoc, extraData);
             if (data && data.ok) {
                 querySuccess = true;
             } else {
