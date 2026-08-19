@@ -12,7 +12,7 @@ let lastProxyFetchTime = 0;
 // Refrescar la lista de proxies colombianos gratuitos usando la API de Proxyscrape
 async function refreshProxyList(fetchLib) {
     console.log('Refrescando lista de proxies de Colombia...');
-    const url = 'https://api.proxyscrape.com/v2/?request=displayproxies&protocol=http&timeout=8000&country=CO&ssl=all&anonymity=all';
+    const url = 'https://api.proxyscrape.com/v2/?request=displayproxies&protocol=http&timeout=6000&country=CO&ssl=yes&anonymity=all';
     try {
         const response = await fetchLib(url);
         const text = await response.text();
@@ -135,7 +135,7 @@ module.exports = async (req, res) => {
                             method: 'POST',
                             headers: headers,
                             body: body,
-                            timeout: 6000
+                            timeout: 3000
                         });
                         if (response.ok) {
                             responseData = await response.json();
@@ -156,7 +156,7 @@ module.exports = async (req, res) => {
                         headers: headers,
                         body: body,
                         agent: proxyObj.agent,
-                        timeout: 5000
+                        timeout: 3000
                     });
 
                     if (response.ok) {
