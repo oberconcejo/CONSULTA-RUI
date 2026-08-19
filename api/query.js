@@ -97,33 +97,33 @@ module.exports = async (req, res) => {
 
         let success = false;
         let attempts = 0;
-        const maxAttempts = 4;
+        const maxAttempts = 5;
         let lastError = '';
         let responseData = null;
 
-        // Verificar si estamos corriendo en la nube de Vercel o en local
-        const isVercel = process.env.VERCEL || process.env.NOW_BUILDER;
+    // Verificar si estamos corriendo en la nube (Vercel o Render) o en local
+    const isCloud = process.env.VERCEL || process.env.RENDER || process.env.NODE_ENV === 'production';
 
-        if (!isVercel) {
-            console.log("Entorno Local de Colombia detectado. Conectando directamente para máxima velocidad...");
-            try {
-                const response = await fetch(url, {
-                    method: 'POST',
-                    headers: headers,
-                    body: body,
-                    timeout: 8000
-                });
-                if (response.ok) {
-                    responseData = await response.json();
-                    success = true;
-                } else {
-                    lastError = `Status ${response.status} ${response.statusText}`;
-                }
-            } catch (err) {
-                lastError = err.message;
+    if (!isCloud) {
+        console.log("Entorno Local de Colombia detectado. Conectando directamente para máxima velocidad...");
+        try {
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: headers,
+                body: body,
+                timeout: 8000
+            });
+            if (response.ok) {
+                responseData = await response.json();
+                success = true;
+            } else {
+                lastError = `Status ${response.status} ${response.statusText}`;
             }
-        } else {
-            // En Vercel (nube), usar la rotación de proxies de Colombia obligatoriamente
+        } catch (err) {
+            lastError = err.message;
+        }
+    } else {
+        // En la nube (Vercel/Render), usar la rotación de proxies de Colombia obligatoriamente
             while (attempts < maxAttempts && !success) {
                 attempts++;
                 const proxyObj = await getProxyAgent(fetch, HttpsProxyAgent);
