@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Plataforma de consulta masiva e individual al Registro Único de Interesados (RUI) del DNP">
+    <title>Consulta RUI - Ventanilla Social</title>
+    
+    <!-- Google Fonts: Outfit (headings) and Inter (body) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <!-- FontAwesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- CSS Stylesheet -->
+    <link rel="stylesheet" href="style.css">
+    
+    <!-- PapaParse CDN for robust CSV parsing -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+    <!-- SheetJS for Excel (.xlsx/.xls) parsing and generation -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+</head>
+<body>
+    <div class="glass-bg-container">
+        <!-- Floating Ambient Lights -->
+        <div class="ambient-light light-1"></div>
+        <div class="ambient-light light-2"></div>
+        
+        <div class="app-container">
+            <!-- Header Section -->
+            <header class="app-header">
+                <div class="logo-area">
+                    <div class="logo-icon">
+                        <i class="fa-solid fa-users-viewfinder"></i>
+                    </div>
+                    <div>
+                        <h1>Consulta RUI</h1>
+                        <p class="subtitle">Ventanilla Social - Departamento Nacional de Planeación (DNP)</p>
+                    </div>
+                </div>
+                
+                <!-- Tab Navigation -->
+                <nav class="tab-nav">
+                    <button class="tab-btn active" data-tab="tab-individual" id="btn-tab-individual">
+                        <i class="fa-solid fa-user"></i> Consulta Individual
+                    </button>
+                    <button class="tab-btn" data-tab="tab-masiva" id="btn-tab-masiva">
+                        <i class="fa-solid fa-users"></i> Consulta Masiva
+                    </button>
+                </nav>
+            </header>
+
+            <main class="app-main">
+                <!-- Official Sync Info Banner -->
+                <div class="official-sync-banner">
+                    <div class="banner-icon">
+                        <i class="fa-solid fa-circle-nodes"></i>
+                    </div>
+                    <div class="banner-text">
+                        <strong>Conexión en Tiempo Real:</strong> Esta plataforma está enlazada directamente con la base de datos oficial del <strong>Departamento Nacional de Planeación (DNP)</strong>. Las consultas se actualizan al instante ante cualquier modificación realizada por el DNP en su registro oficial.
+                    </div>
+                </div>
+                <!-- ================= TAB 1: INDIVIDUAL QUERY ================= -->
+                <section id="tab-individual" class="tab-content active">
+                    <div class="card dnp-card">
+                        <!-- Header Bar (Dark Blue) -->
+                        <div class="dnp-header-bar">
+                            <span class="dnp-header-title">
+                                <i class="fa-regular fa-file-lines"></i> CONSULTA RUI
+                            </span>
+                            <div class="dnp-header-actions">
+                                <button type="button" id="btn-print-individual" class="dnp-btn-print">
+                                    <i class="fa-solid fa-print"></i> IMPRIMIR REPORTE
+                                </button>
+                                <button type="button" id="btn-clear-individual" class="dnp-btn-close">
+                                    <i class="fa-solid fa-xmark"></i>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="dnp-card-body">
+                            <!-- Search Form -->
+                            <form id="individual-form" class="dnp-search-form">
+                                <div class="dnp-form-group">
+                                    <label for="ind-doc-type">TIPO DE DOCUMENTO</label>
+                                    <div class="select-wrapper">
+                                        <select id="ind-doc-type" required>
+                                            <option value="3" selected>Cédula de ciudadanía</option>
+                                            <option value="2">Tarjeta de identidad</option>
+                                            <option value="1">Registro civil</option>
+                                            <option value="4">Cédula de extranjería</option>
+                                            <option value="5">Pasaporte</option>
+                                            <option value="9">Permiso por Protección Temporal (PPT)</option>
+                                        </select>
+                                        <i class="fa-solid fa-chevron-down select-arrow"></i>
+                                    </div>
+                                </div>
+                                
+                                <div class="dnp-form-group">
+                                    <label for="ind-doc-num">NÚMERO DE DOCUMENTO</label>
+                                    <input type="text" id="ind-doc-num" placeholder="Ej. 1192746186" required autocomplete="off">
+                                </div>
+                                
+                                <button type="submit" class="dnp-btn-submit" id="btn-submit-ind">
+                                    <i class="fa-solid fa-magnifying-glass"></i> Consultar
+                                </button>
+                            </form>
+
+                            <!-- Individual Result Loader -->
+                            <div id="individual-loader" class="loader-container hidden">
+                                <div class="spinner"></div>
+                                <p>Buscando en la base de datos oficial del DNP...</p>
+                            </div>
+
+                            <!-- ERROR CONTAINER -->
+                            <div id="individual-error" class="error-container hidden">
+                                <div class="error-icon">
+                                    <i class="fa-solid fa-circle-exclamation"></i>
+                                </div>
+                                <div class="error-details">
+                                    <h4>Error en la consulta</h4>
+                                    <p id="individual-error-msg">No se pudo encontrar información para este documento o hubo un fallo en el servidor.</p>
+                                </div>
+                            </div>
+
+                            <!-- IDENTICAL RESULT CARD -->
+                            <div id="individual-result" class="dnp-result-container hidden">
+                                <div class="dnp-result-main">
+                                    <!-- Left Section: Logo & Info -->
+                                    <div class="dnp-result-left">
+                                        <img src="https://ventanillasocial.dnp.gov.co/Content/img/logo_rui.png" alt="Logo RUI Oficial" class="dnp-rui-logo">
+                                        
+                                        <h2 class="dnp-citizen-name" id="res-nombre">-</h2>
+                                        
+                                        <div class="dnp-citizen-meta">
+                                            <span id="res-edad-sexo">-</span>
+                                            <span id="res-ubicacion">-</span>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Right Section: Classification Box -->
+                                    <div class="dnp-result-right">
+                                        <div class="dnp-class-box" id="res-class-box">
+                                            <span class="dnp-class-label">CLASIFICACIÓN RUI</span>
+                                            <span class="dnp-class-value" id="res-class-value">-</span>
+                                            <span class="dnp-class-badge" id="res-class-badge">-</span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="dnp-result-source">
+                                    <i class="fa-regular fa-clock"></i> Fuente: <strong>RSH</strong>
+                                </div>
+
+                                <!-- Personal Details Table -->
+                                <div class="dnp-personal-data-section">
+                                    <h3 class="dnp-section-header">
+                                        <i class="fa-solid fa-user"></i> DATOS PERSONALES
+                                    </h3>
+                                    
+                                    <div class="dnp-details-table">
+                                        <div class="dnp-details-row">
+                                            <span class="dnp-row-label">Tipo de Documento</span>
+                                            <span class="dnp-row-value" id="res-tbl-tipo">-</span>
+                                        </div>
+                                        <div class="dnp-details-row">
+                                            <span class="dnp-row-label">Número de Documento</span>
+                                            <span class="dnp-row-value" id="res-tbl-num">-</span>
+                                        </div>
+                                        <div class="dnp-details-row">
+                                            <span class="dnp-row-label">Nacionalidad</span>
+                                            <span class="dnp-row-value" id="res-tbl-nacionalidad">Colombiana</span>
+                                        </div>
+                                        <div class="dnp-details-row">
+                                            <span class="dnp-row-label">Departamento</span>
+                                            <span class="dnp-row-value" id="res-tbl-depto">-</span>
+                                        </div>
+                                        <div class="dnp-details-row">
+                                            <span class="dnp-row-label">Municipio</span>
+                                            <span class="dnp-row-value" id="res-tbl-mpio">-</span>
+                                        </div>
+                                        <div class="dnp-details-row">
+                                            <span class="dnp-row-label">Grupo de Ingresos</span>
+                                            <span class="dnp-row-value" id="res-tbl-ingresos">-</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- ================= TAB 2: MASSIVE QUERY ================= -->
+                <section id="tab-masiva" class="tab-content">
+                    <!-- CSV Drag & Drop Upload Card -->
+                    <div class="card glass-card">
+                        <div class="card-header">
+                            <h2><i class="fa-solid fa-file-csv text-accent"></i> Consulta Masiva RUI</h2>
+                            <p>Carga un archivo CSV o de texto para procesar múltiples consultas simultáneamente.</p>
+                        </div>
+                        
+                        <!-- Drag & Drop Zone -->
+                        <div id="drop-zone" class="drop-zone">
+                            <div class="drop-zone-icon">
+                                <i class="fa-solid fa-cloud-arrow-up"></i>
+                            </div>
+                            <h3>Arrastra tu archivo aquí</h3>
+                            <p>o haz clic para explorar tu ordenador (CSV, TXT, Excel)</p>
+                            <input type="file" id="file-input" accept=".csv,.txt,.xlsx,.xls" class="hidden">
+                        </div>
+
+                        <!-- File Loaded Panel (Hidden by default) -->
+                        <div id="file-details-panel" class="file-details-panel hidden">
+                            <div class="file-info">
+                                <i class="fa-solid fa-file-excel file-icon"></i>
+                                <div>
+                                    <h4 id="file-name">archivo.csv</h4>
+                                    <p><span id="file-size">0 KB</span> | <span id="file-rows">0</span> filas detectadas</p>
+                                </div>
+                            </div>
+                            <button id="btn-remove-file" class="btn btn-text-danger" title="Quitar archivo">
+                                <i class="fa-solid fa-trash-can"></i> Quitar
+                            </button>
+                        </div>
+
+                        <!-- CSV Configuration Panel (Hidden by default) -->
+                        <div id="csv-config-panel" class="csv-config-panel hidden">
+                            <h3 class="section-title"><i class="fa-solid fa-sliders"></i> Configuración de Importación</h3>
+                            
+                            <div class="config-grid">
+                                <div class="form-group">
+                                    <label for="csv-delimiter">Delimitador</label>
+                                    <div class="select-wrapper">
+                                        <select id="csv-delimiter">
+                                            <option value="auto" selected>Detectar automáticamente</option>
+                                            <option value=",">Coma (,)</option>
+                                            <option value=";">Punto y coma (;)</option>
+                                            <option value="&#9;">Tabulación</option>
+                                        </select>
+                                        <i class="fa-solid fa-chevron-down select-arrow"></i>
+                                    </div>
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="col-doc-num">Columna Documento</label>
+                                    <div class="select-wrapper">
+                                        <select id="col-doc-num" required disabled>
+                                            <option value="">Seleccione columna...</option>
+                                        </select>
+                                        <i class="fa-solid fa-chevron-down select-arrow"></i>
+                                    </div>
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="col-doc-type">Columna Tipo Documento</label>
+                                    <div class="select-wrapper">
+                                        <select id="col-doc-type" required disabled>
+                                            <option value="">Seleccione columna (o usar fijo)...</option>
+                                            <option value="fixed">-- VALOR FIJO EN TODO EL LOTE --</option>
+                                        </select>
+                                        <i class="fa-solid fa-chevron-down select-arrow"></i>
+                                    </div>
+                                </div>
+
+                                <!-- Fixed Doc Type Selector (Hidden by default, shown if "fixed" is selected) -->
+                                <div class="form-group hidden" id="fixed-type-group">
+                                    <label for="fixed-doc-type">Tipo Doc Fijo</label>
+                                    <div class="select-wrapper">
+                                        <select id="fixed-doc-type">
+                                            <option value="3" selected>Cédula de Ciudadanía (CC)</option>
+                                            <option value="2">Tarjeta de Identidad (TI)</option>
+                                            <option value="1">Registro Civil (RC)</option>
+                                            <option value="4">Cédula de Extranjería (CE)</option>
+                                            <option value="5">Pasaporte (PA)</option>
+                                            <option value="9">Permiso por Protección Temporal (PPT)</option>
+                                        </select>
+                                        <i class="fa-solid fa-chevron-down select-arrow"></i>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Performance Configuration -->
+                            <h3 class="section-title"><i class="fa-solid fa-gauge-high"></i> Optimización y Velocidad</h3>
+                            <div class="config-grid">
+                                <div class="form-group">
+                                    <label for="batch-concurrency">
+                                        Peticiones Simultáneas (Concurrencia): <span id="concurrency-val" class="text-accent font-bold">5</span>
+                                    </label>
+                                    <input type="range" id="batch-concurrency" min="1" max="15" value="5" class="slider">
+                                    <p class="input-help">Mayor número = más rápido, pero aumenta riesgo de bloqueo de IP por el DNP.</p>
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="batch-delay">
+                                        Retraso entre Peticiones (Delay): <span id="delay-val" class="text-accent font-bold">200 ms</span>
+                                    </label>
+                                    <input type="range" id="batch-delay" min="0" max="2000" step="50" value="200" class="slider">
+                                    <p class="input-help">Retraso artificial entre peticiones consecutivas para simular navegación humana.</p>
+                                </div>
+                            </div>
+
+                            <!-- Batch Actions -->
+                            <div class="batch-actions-bar">
+                                <button id="btn-start-batch" class="btn btn-accent">
+                                    <i class="fa-solid fa-play"></i> Iniciar Procesamiento
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Progress and Control Panel (Hidden by default, shown while processing) -->
+                    <div id="progress-card" class="card glass-card hidden">
+                        <div class="progress-header">
+                            <div>
+                                <h2><i class="fa-solid fa-spinner fa-spin text-accent" id="progress-spinner"></i> Estado del Procesamiento</h2>
+                                <p id="progress-status-text">Procesando cola de consultas...</p>
+                            </div>
+                            <div class="control-buttons">
+                                <button id="btn-pause-batch" class="btn btn-outline btn-sm">
+                                    <i class="fa-solid fa-pause"></i> Pausar
+                                </button>
+                                <button id="btn-resume-batch" class="btn btn-outline btn-sm hidden">
+                                    <i class="fa-solid fa-play"></i> Reanudar
+                                </button>
+                                <button id="btn-cancel-batch" class="btn btn-danger btn-sm">
+                                    <i class="fa-solid fa-stop"></i> Cancelar
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Progress Bar Component -->
+                        <div class="progress-bar-container">
+                            <div id="progress-bar-fill" class="progress-bar-fill" style="width: 0%"></div>
+                            <span id="progress-bar-percent" class="progress-bar-percent">0%</span>
+                        </div>
+
+                        <!-- Stats Cards Grid -->
+                        <div class="stats-grid">
+                            <div class="stat-box">
+                                <span class="stat-label">Total Registros</span>
+                                <span class="stat-value" id="stat-total">0</span>
+                            </div>
+                            <div class="stat-box success-accent">
+                                <span class="stat-label">Encontrados</span>
+                                <span class="stat-value" id="stat-success">0</span>
+                            </div>
+                            <div class="stat-box error-accent">
+                                <span class="stat-label">No Encontrados / Error</span>
+                                <span class="stat-value" id="stat-error">0</span>
+                            </div>
+                            <div class="stat-box warning-accent">
+                                <span class="stat-label">Pendientes</span>
+                                <span class="stat-value" id="stat-pending">0</span>
+                            </div>
+                            <div class="stat-box">
+                                <span class="stat-label">Tiempo Transcurrido</span>
+                                <span class="stat-value" id="stat-time">00:00</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Results Panel (Hidden by default, shown once queries start) -->
+                    <div id="results-card" class="card glass-card hidden">
+                        <div class="results-header">
+                            <div>
+                                <h2>Resultados Obtenidos</h2>
+                                <p>Los resultados se muestran en tiempo real y pueden ser filtrados o descargados.</p>
+                            </div>
+                            <div class="results-actions">
+                                <div class="search-box">
+                                    <i class="fa-solid fa-magnifying-glass"></i>
+                                    <input type="text" id="table-filter" placeholder="Filtrar resultados...">
+                                </div>
+                                <button id="btn-download-results" class="btn btn-outline">
+                                    <i class="fa-solid fa-file-csv"></i> Descargar CSV
+                                </button>
+                                <button id="btn-download-excel" class="btn btn-primary">
+                                    <i class="fa-solid fa-file-excel"></i> Descargar Excel
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Spreadsheet Data Grid Container (Isolates reflows with content-visibility) -->
+                        <div class="table-container-wrapper">
+                            <div class="table-container board-column">
+                                <table id="results-table">
+                                    <thead>
+                                        <tr>
+                                            <th>#</th>
+                                            <th>Documento</th>
+                                            <th>Tipo</th>
+                                            <th>Nombre Completo</th>
+                                            <th>Sexo</th>
+                                            <th>Edad</th>
+                                            <th>Departamento</th>
+                                            <th>Municipio</th>
+                                            <th>Grupo Ingresos</th>
+                                            <th>Grupo RUI</th>
+                                            <th>Nivel RUI</th>
+                                            <th>Estado</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="results-tbody">
+                                        <!-- Real-time rows will be appended here -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+            </main>
+
+            <footer class="app-footer">
+                <p>&copy; 2026 Consulta RUI - Diseñado y Desarrollado por <strong>Ober Osorio</strong>.</p>
+                <p class="disclaimer">Esta herramienta es de uso interno y funciona como cliente de los servicios del DNP.</p>
+            </footer>
+        </div>
+    </div>
+
+    <!-- Application Script -->
+    <script src="app.js"></script>
+</body>
+</html>

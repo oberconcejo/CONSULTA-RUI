@@ -1,0 +1,21 @@
+{
+  "name": "consulta-rui",
+  "version": "1.0.0",
+  "description": "Aplicación de consulta masiva e individual al RUI a través de proxy local",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2"
+  },
+  "keywords": [
+    "rui",
+    "dnp",
+    "query",
+    "mass-query"
+  ],
+  "author": "Ober Osorio",
+  "license": "ISC"
+}
