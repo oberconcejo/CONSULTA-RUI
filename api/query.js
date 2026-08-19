@@ -410,15 +410,12 @@ module.exports = async (req, res) => {
     if (sheetsUrl) {
       const extras = extractExtraFields(extraData);
       const sheetPayload = {
-        documentType: pTipDoc,
-        documentNumber: pNumDoc,
-        fullName: responseData.nombreCompleto || responseData.nombre || extras.fullName || '',
-        phone: extras.phone,
-        email: extras.email,
-        address: extras.address,
-        city: responseData.municipio || '',
-        department: responseData.departamento || '',
-        dataString: JSON.stringify(responseData)
+        cedula: pNumDoc,
+        nombre: responseData.nombreCompleto || responseData.nombre || extras.fullName || '',
+        telefono: extras.phone || '',
+        municipio: responseData.municipio || '',
+        edad: responseData.edad ? String(responseData.edad) : '',
+        grupoSisben: responseData.grupRui || responseData.nivelRui || ''
       };
       fetch(sheetsUrl, {
         method: 'POST',
