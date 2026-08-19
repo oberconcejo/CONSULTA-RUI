@@ -286,18 +286,18 @@
                             <div class="config-grid">
                                 <div class="form-group">
                                     <label for="batch-concurrency">
-                                        Peticiones Simultáneas (Concurrencia): <span id="concurrency-val" class="text-accent font-bold">5</span>
+                                        Peticiones Simultáneas (Concurrencia): <span id="concurrency-val" class="text-accent font-bold">20</span>
                                     </label>
-                                    <input type="range" id="batch-concurrency" min="1" max="15" value="5" class="slider">
-                                    <p class="input-help">Mayor número = más rápido, pero aumenta riesgo de bloqueo de IP por el DNP.</p>
+                                    <input type="range" id="batch-concurrency" min="1" max="40" value="20" class="slider">
+                                    <p class="input-help">Mayor número = más rápido. Recomendado: 15-25 para máxima velocidad.</p>
                                 </div>
 
                                 <div class="form-group">
                                     <label for="batch-delay">
-                                        Retraso entre Peticiones (Delay): <span id="delay-val" class="text-accent font-bold">200 ms</span>
+                                        Retraso entre Peticiones (Delay): <span id="delay-val" class="text-accent font-bold">50 ms</span>
                                     </label>
-                                    <input type="range" id="batch-delay" min="0" max="2000" step="50" value="200" class="slider">
-                                    <p class="input-help">Retraso artificial entre peticiones consecutivas para simular navegación humana.</p>
+                                    <input type="range" id="batch-delay" min="0" max="2000" step="50" value="50" class="slider">
+                                    <p class="input-help">Retraso artificial entre peticiones. Recomendado: 0-100 ms para velocidad extrema.</p>
                                 </div>
                             </div>
 

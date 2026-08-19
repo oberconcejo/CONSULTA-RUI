@@ -1,6 +1,9 @@
 const express = require('express');
 const path = require('path');
 
+// Desactivar la verificación estricta de SSL/TLS para evitar caídas por certificados del DNP
+process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
+
 const app = express();
 const PORT = process.env.PORT || 3000;
 
@@ -11,8 +14,20 @@ app.use(express.urlencoded({ extended: true }));
 // Serve static files from the 'public' directory
 app.use(express.static(path.join(__dirname, 'public')));
 
+// Secret Key to keep API private
+const RUI_API_KEY = process.env.RUI_API_KEY || 'ober_rui_key_sec_9876';
+
 // API Proxy endpoint to query RUI
 app.post('/api/query', async (req, res) => {
+    // Validate API Key
+    const clientKey = req.headers['x-api-key'];
+    if (!clientKey || clientKey !== RUI_API_KEY) {
+        return res.status(401).json({
+            ok: false,
+            error: 'No autorizado: API Key inválida o no proporcionada.'
+        });
+    }
+
     const { pNumDoc, pTipDoc } = req.body;
 
     if (!pNumDoc || !pTipDoc) {

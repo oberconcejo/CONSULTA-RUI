@@ -250,7 +250,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const response = await fetch('/api/query', {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json',
+                'X-API-Key': 'ober_rui_key_sec_9876'
             },
             body: JSON.stringify({ pNumDoc: numDoc, pTipDoc: tipDoc })
         });
