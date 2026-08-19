@@ -1,7 +1,5 @@
 const express = require('express');
 const path = require('path');
-const fetch = require('node-fetch');
-const { HttpsProxyAgent } = require('https-proxy-agent');
 
 // Desactivar la verificación estricta de SSL/TLS para evitar caídas por certificados del DNP
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';

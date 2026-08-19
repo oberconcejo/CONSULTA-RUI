@@ -59,7 +59,7 @@ module.exports = async (req, res) => {
     try {
         // Cargar dependencias de forma dinámica dentro del handler para diagnosticar fallas de carga en Vercel
         const fetch = require('node-fetch');
-        const { HttpsProxyAgent } = require('https-proxy-agent');
+        const HttpsProxyAgent = require('https-proxy-agent');
 
         // Solo permitir solicitudes POST para la API
         if (req.method !== 'POST') {
