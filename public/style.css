@@ -1784,16 +1784,22 @@ body {
    ========================================================================== */
 @page {
     size: letter;
-    margin: 15mm;
+    margin: 10mm !important;
 }
 
 @media print {
+    html, body {
+        height: 100% !important;
+        overflow: hidden !important;
+    }
+
     /* Reset body styles for print */
     body {
         background: #ffffff !important;
         color: #333333 !important;
         margin: 0 !important;
         padding: 0 !important;
+        font-size: 13px !important;
     }
 
     body * {
@@ -1820,6 +1826,8 @@ body {
         color: #333333 !important;
         padding: 0 !important;
         margin: 0 !important;
+        page-break-inside: avoid !important;
+        break-inside: avoid !important;
     }
     
     .dnp-card-body {
