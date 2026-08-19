@@ -81,7 +81,12 @@ app.get('*', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-app.listen(PORT, () => {
-    console.log(`Servidor de Consulta RUI iniciado correctamente.`);
-    console.log(`Abra su navegador en: http://localhost:${PORT}`);
-});
+// Iniciar puerto solo en ejecución directa local
+if (require.main === module) {
+    app.listen(PORT, () => {
+        console.log(`Servidor de Consulta RUI iniciado correctamente.`);
+        console.log(`Abra su navegador en: http://localhost:${PORT}`);
+    });
+}
+
+module.exports = app;
