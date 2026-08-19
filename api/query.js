@@ -7,10 +7,39 @@ process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
 // Secret Key to keep API private
 const RUI_API_KEY = process.env.RUI_API_KEY || 'ober_rui_key_sec_9876';
 
+// Lista de proxies colombianos proveída por el usuario (priorizada)
+const USER_PROXIES = [
+    '181.78.74.253:999',
+    '181.119.84.104:999',
+    '200.69.92.8:999',
+    '181.78.74.252:999',
+    '181.205.205.170:999',
+    '24.152.58.107:999',
+    '181.78.174.14:8080',
+    '181.78.75.84:8080',
+    '179.1.126.45:999',
+    '190.242.60.137:999',
+    '38.211.76.177:999',
+    '190.60.34.6:999',
+    '179.1.113.113:999',
+    '209.14.115.222:999',
+    '190.7.138.78:8080',
+    '177.73.155.212:999',
+    '181.204.39.202:26312',
+    '181.78.233.10:80',
+    '186.33.54.198:999',
+    '131.221.42.221:4040',
+    '38.199.26.44:999',
+    '186.96.111.214:999',
+    '8.243.68.187:999'
+];
+
 // Variables de estado del gestor de proxies colombianos (en memoria del contenedor)
-let colombianProxies = [];
+let colombianProxies = [...USER_PROXIES];
 let currentProxyIndex = 0;
 let lastProxyFetchTime = 0;
+let refreshPromise = null;
+
 
 // Refrescar la lista de proxies colombianos combinando Proxyscrape, Geonode y Proxifly
 async function refreshProxyList(fetchLib) {
@@ -76,20 +105,28 @@ async function refreshProxyList(fetchLib) {
     }
     
     // Remover duplicados y guardar
-    colombianProxies = [...new Set(proxies)];
+    colombianProxies = [...new Set([...USER_PROXIES, ...proxies])];
     currentProxyIndex = 0;
     lastProxyFetchTime = Date.now();
-    console.log(`Lista de proxies combinada y limpia. Total: ${colombianProxies.length} proxies de Colombia cargados.`);
+    console.log(`Lista de proxies combinada y limpia. Total: ${colombianProxies.length} proxies de Colombia cargados (incluyendo proxies estáticos).`);
 }
 
 // Obtener lista de proxies para la carrera actual
 async function getProxiesForRace(fetchLib, count) {
-    if (colombianProxies.length === 0 || (Date.now() - lastProxyFetchTime > 10 * 60 * 1000)) {
-        await refreshProxyList(fetchLib);
+    // Si la lista está vacía por alguna razón, inicializar con las del usuario
+    if (colombianProxies.length === 0) {
+        colombianProxies = [...USER_PROXIES];
     }
     
-    if (colombianProxies.length === 0) {
-        return [];
+    // Si ha pasado el tiempo de expiración (10 minutos) o no se han buscado proxies externos, 
+    // refrescar en segundo plano para no ralentizar la consulta actual
+    const needsRefresh = lastProxyFetchTime === 0 || (Date.now() - lastProxyFetchTime > 10 * 60 * 1000);
+    if (needsRefresh && !refreshPromise) {
+        // Ejecutar en segundo plano de manera asíncrona sin "await" para que no bloquee esta consulta
+        lastProxyFetchTime = Date.now(); // Prevenir múltiples ejecuciones simultáneas
+        refreshPromise = refreshProxyList(fetchLib)
+            .catch(err => console.error("Error al refrescar proxies en segundo plano:", err))
+            .finally(() => { refreshPromise = null; });
     }
     
     const selected = [];
@@ -206,9 +243,14 @@ module.exports = async (req, res) => {
                         if (response.ok) {
                             const data = await response.json();
                             if (data && typeof data === 'object') {
-                                // Guardar el índice del proxy exitoso para priorizarlo en la siguiente carrera
-                                currentProxyIndex = colombianProxies.indexOf(proxy);
-                                console.log(`[Éxito] Proxy ${proxy} ganó la carrera y completó la consulta.`);
+                                // Reordenar la lista para colocar el proxy ganador al principio
+                                const idx = colombianProxies.indexOf(proxy);
+                                if (idx > -1) {
+                                    colombianProxies.splice(idx, 1);
+                                    colombianProxies.unshift(proxy);
+                                }
+                                currentProxyIndex = 0; // El ganador ahora está en la posición 0
+                                console.log(`[Éxito] Proxy ${proxy} ganó la carrera y se movió al primer lugar.`);
                                 return data;
                             }
                         }

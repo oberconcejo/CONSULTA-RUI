@@ -5,11 +5,13 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "dev": "node server.js"
+    "dev": "node server.js",
+    "tunnel": "node server.js --tunnel"
   },
   "dependencies": {
     "express": "^4.19.2",
     "https-proxy-agent": "^5.0.1",
+    "localtunnel": "^2.0.2",
     "node-fetch": "^2.7.0"
   },
   "keywords": [
