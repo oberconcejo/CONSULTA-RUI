@@ -9,6 +9,7 @@
     "tunnel": "node server.js --tunnel"
   },
   "dependencies": {
+    "dotenv": "^16.4.5",
     "express": "^4.19.2",
     "https-proxy-agent": "^5.0.1",
     "localtunnel": "^2.0.2",
