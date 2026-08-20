@@ -2061,3 +2061,137 @@ body {
         font-size: 16px;
     }
 }
+
+/* Premium Ads & Fallbacks styling */
+.ad-click-wrapper {
+    display: block;
+    width: 100%;
+    text-decoration: none;
+    cursor: pointer;
+    color: inherit;
+    transition: var(--transition-normal);
+}
+
+.ad-live-wrapper {
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.ad-live-container {
+    width: 100%;
+    max-width: 728px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.ad-live-container:empty {
+    display: none;
+}
+
+/* Fallback Banner Styles */
+.ad-fallback-banner {
+    width: 100%;
+    background: linear-gradient(135deg, hsla(250, 89%, 65%, 0.08) 0%, hsla(270, 91%, 65%, 0.08) 100%);
+    border: 1px dashed hsla(250, 89%, 65%, 0.25);
+    border-radius: var(--radius-sm);
+    padding: 12px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: var(--transition-normal);
+}
+
+.ad-click-wrapper:hover .ad-fallback-banner {
+    background: linear-gradient(135deg, hsla(250, 89%, 65%, 0.15) 0%, hsla(270, 91%, 65%, 0.15) 100%);
+    border-color: hsla(250, 89%, 65%, 0.5);
+    box-shadow: 0 0 15px hsla(250, 89%, 65%, 0.15);
+}
+
+.ad-fallback-content {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    gap: 16px;
+}
+
+.ad-fallback-icon {
+    font-size: 24px;
+    color: var(--color-accent);
+    filter: drop-shadow(0 0 8px var(--color-accent-glow));
+    flex-shrink: 0;
+}
+
+.ad-fallback-text-group {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    flex-grow: 1;
+    text-align: left;
+}
+
+.ad-fallback-title {
+    font-family: var(--font-heading);
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--color-text-primary);
+    letter-spacing: 0.01em;
+}
+
+.ad-fallback-subtitle {
+    font-family: var(--font-body);
+    font-size: 11px;
+    color: var(--color-text-muted);
+}
+
+.ad-fallback-btn {
+    font-family: var(--font-heading);
+    font-size: 12px;
+    font-weight: 600;
+    color: #fff;
+    background: var(--color-accent-gradient);
+    border: none;
+    padding: 6px 14px;
+    border-radius: var(--radius-sm);
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+    cursor: pointer;
+    transition: var(--transition-fast);
+    flex-shrink: 0;
+}
+
+.ad-click-wrapper:hover .ad-fallback-btn {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 14px hsla(250, 89%, 65%, 0.25);
+}
+
+/* Hide fallback if live ad container is NOT empty */
+.ad-click-wrapper:has(.ad-live-container > *) .ad-fallback-banner {
+    display: none;
+}
+
+/* Responsive adjustment */
+@media (max-width: 768px) {
+    .ad-fallback-banner {
+        padding: 8px 12px;
+    }
+    .ad-fallback-content {
+        gap: 10px;
+    }
+    .ad-fallback-icon {
+        font-size: 20px;
+    }
+    .ad-fallback-title {
+        font-size: 12px;
+    }
+    .ad-fallback-subtitle {
+        font-size: 10px;
+    }
+    .ad-fallback-btn {
+        padding: 4px 10px;
+        font-size: 10px;
+    }
+}
+
