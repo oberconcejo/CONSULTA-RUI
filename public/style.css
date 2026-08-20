@@ -2072,25 +2072,6 @@ body {
     transition: var(--transition-normal);
 }
 
-.ad-live-wrapper {
-    width: 100%;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-}
-
-.ad-live-container {
-    width: 100%;
-    max-width: 728px;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-}
-
-.ad-live-container:empty {
-    display: none;
-}
-
 /* Fallback Banner Styles */
 .ad-fallback-banner {
     width: 100%;
@@ -2167,11 +2148,6 @@ body {
     box-shadow: 0 6px 14px hsla(250, 89%, 65%, 0.25);
 }
 
-/* Hide fallback if live ad container is NOT empty */
-.ad-click-wrapper:has(.ad-live-container > *) .ad-fallback-banner {
-    display: none;
-}
-
 /* Responsive adjustment */
 @media (max-width: 768px) {
     .ad-fallback-banner {
@@ -2192,33 +2168,6 @@ body {
     .ad-fallback-btn {
         padding: 4px 10px;
         font-size: 10px;
-    }
-    
-    /* Horizontal swipe scroll for native ads to prevent vertical stacking */
-    .ad-live-wrapper {
-        overflow-x: auto;
-        justify-content: flex-start;
-        width: 100%;
-        padding-bottom: 6px;
-        -webkit-overflow-scrolling: touch;
-    }
-    
-    .ad-live-wrapper::-webkit-scrollbar {
-        height: 4px;
-    }
-    
-    .ad-live-wrapper::-webkit-scrollbar-track {
-        background: transparent;
-    }
-    
-    .ad-live-wrapper::-webkit-scrollbar-thumb {
-        background: var(--color-card-border);
-        border-radius: 2px;
-    }
-
-    .ad-live-container {
-        min-width: 728px;
-        width: 728px;
     }
 }
 
